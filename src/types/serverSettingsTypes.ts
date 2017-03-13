@@ -69,9 +69,10 @@ export class Settings implements ISettings {
     public windowState: IWindowStateSettings;
     public users: IUserSettings;
     public activeBot: string;
+    public listenPort: number;
 
-    constructor(settings?: ISettings) {
-        Object.assign(this, settings);
+    constructor(settings?: ISettings) {        
+        Object.assign(this, settings);        
     }
 
     public getActiveBot(): IBot {

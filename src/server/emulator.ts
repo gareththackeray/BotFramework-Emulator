@@ -40,6 +40,7 @@ import { ConversationManager } from './conversationManager';
 import * as Settings from './settings';
 import * as Electron from 'electron';
 import { mainWindow } from './main';
+import {RestServer} from './restServer';
 
 
 interface IQueuedMessage {
@@ -57,7 +58,11 @@ export class Emulator {
     proxyAgent: any;
     static queuedMessages: IQueuedMessage[] = [];
 
-    constructor() {
+    constructor(listenPort: number) {
+        if (listenPort){
+            RestServer.listenPort = listenPort;
+        }
+
         // When the client notifies us it has started up, send it the configuration.
         // Note: We're intentionally sending and ISettings here, not a Settings. This
         // is why we're getting the value from getStore().getState().
@@ -72,8 +77,12 @@ export class Emulator {
             Emulator.queuedMessages.forEach((msg) => {
                 Emulator.send(msg.channel, ...msg.args);
             });
-            Emulator.queuedMessages = [];
+            Emulator.queuedMessages = [];            
+
+            Settings.getStore().dispatch({type:'ActiveBot_Set', state:{botId: 'default-bot'}});
+
             Emulator.send('serverSettings', Settings.getStore().getState());
+
         });
         Settings.addSettingsListener(() => {
             Emulator.send('serverSettings', Settings.getStore().getState());
@@ -83,9 +92,9 @@ export class Emulator {
     /**
      * Loads settings from disk and then creates the emulator.
      */
-    static startup() {
+    static startup(listenPort: number) {
         Settings.startup();
-        emulator = new Emulator();
+        emulator = new Emulator(listenPort);
         emulator.framework.startup();
     }
 

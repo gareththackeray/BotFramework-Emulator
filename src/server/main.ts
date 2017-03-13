@@ -39,6 +39,8 @@ import * as url from 'url';
 import * as path from 'path';
 import * as log from './log';
 import { Emulator, emulator } from './emulator';
+import * as nomnom from 'nomnom';
+
 var pjson = require('../../package.json');
 
 process.on('uncaughtException', (error: Error) => {
@@ -153,7 +155,17 @@ const shouldQuit = Electron.app.makeSingleInstance((commandLine, workingDirector
 if (shouldQuit) {
     Electron.app.quit();
 } else {
-    Emulator.startup();
+    let listenPort:number;
+    
+    for(let i = 0; i < process.argv.length; i++){
+        if (/^\d+$/.test(process.argv[i])){            
+            listenPort = parseInt(process.argv[i]);            
+            break;            
+        }
+    }
+
+    Emulator.startup(listenPort);
+
     Electron.app.on('ready', createMainWindow);
     Electron.app.on('window-all-closed', function () {
         if (process.platform !== 'darwin') {
@@ -165,6 +177,7 @@ if (shouldQuit) {
             createMainWindow();
         }
     });
+    
 }
 
 // Do this last, otherwise startup bugs are harder to diagnose.

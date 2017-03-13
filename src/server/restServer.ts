@@ -33,7 +33,7 @@
 
 import * as Restify from 'restify';
 import * as log from './log';
-
+import * as Settings from './settings';
 
 export class RestServer {
     router: Restify.Server;
@@ -55,12 +55,18 @@ export class RestServer {
 
     public restart() {
         this.stop();
-        return this.router.listen();
+        if (RestServer.listenPort){
+            return this.router.listen(RestServer.listenPort);
+        } else {
+            return this.router.listen();
+        }        
     }
 
     public stop() {
         return this.router.close();
     }
+
+    static listenPort:number = null;
 }
 
 // when debugging locally with a bot with appid and password = ""
