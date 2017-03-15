@@ -50,7 +50,7 @@ process.on('uncaughtException', (error: Error) => {
 
 export let mainWindow: Electron.BrowserWindow;
 
-const createMainWindow = () => {
+const createMainWindow = (listenPort: number) => {
 
     const windowTitle = "Bot Framework Channel Emulator";
 
@@ -74,7 +74,7 @@ const createMainWindow = () => {
                 directWrite: false
             }
         });
-    mainWindow.setTitle(windowTitle);
+    mainWindow.setTitle("" + listenPort.toString() + " " + windowTitle);    
 
     //mainWindow.webContents.openDevTools();
 
@@ -163,18 +163,18 @@ if (shouldQuit) {
             break;            
         }
     }
-
+    
     Emulator.startup(listenPort);
 
-    Electron.app.on('ready', createMainWindow);
+    Electron.app.on('ready', () => createMainWindow(listenPort));
     Electron.app.on('window-all-closed', function () {
         if (process.platform !== 'darwin') {
             Electron.app.quit();
         }
     });
     Electron.app.on('activate', function () {
-        if (mainWindow === null) {
-            createMainWindow();
+        if (mainWindow === null) {            
+            createMainWindow(listenPort);
         }
     });
     
