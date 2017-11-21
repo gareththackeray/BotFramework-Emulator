@@ -35,18 +35,18 @@ import { shell } from 'electron';
 import * as URL from 'url';
 import * as QueryString from 'querystring';
 import { InspectorActions, AddressBarActions } from './reducers';
-import { getSettings, selectedActivity$, deselectActivity } from './settings';
+import { getSettings, selectedActivity$ } from './settings';
 import { Settings as ServerSettings } from '../types/serverSettingsTypes';
 import { Emulator } from './emulator';
+import { PaymentEncoder } from '../shared/paymentEncoder';
 import * as log from './log';
+import * as Electron from 'electron';
 
 
 export function navigate(url: string) {
     try {
         const parsed = URL.parse(url);
-        if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-            shell.openExternal(url, { activate: true });
-        } else if (parsed.protocol === "emulator:") {
+        if (parsed.protocol === "emulator:") {
             const params = QueryString.parse(parsed.query);
             if (parsed.host === 'inspect') {
                 navigateInspectUrl(params);
@@ -57,8 +57,14 @@ export function navigate(url: string) {
             } else if (parsed.host === 'command') {
                 navigateCommandUrl(params);
             }
+        } else if (parsed.protocol.startsWith(PaymentEncoder.PaymentEmulatorUrlProtocol)) {
+            navigatePaymentUrl(parsed.path);
+        } else if (parsed.protocol.startsWith('file:')) {
+            // ignore
+        } else if (parsed.protocol.startsWith('javascript:')) {
+            // ignore
         } else {
-            // Ignore
+            shell.openExternal(url, { activate: true });
         }
     } catch (e) {
         log.error(e.message);
@@ -69,12 +75,17 @@ function navigateInspectUrl(params: string[]) {
     try {
         const encoded = params['obj'];
         let json;
+        let obj;
         try {
             json = decodeURIComponent(encoded);
         } catch (e) {
             json = encoded;
         }
-        const obj = JSON.parse(json);
+        try {
+            obj = JSON.parse(json);
+        } catch (e) {
+            obj = json;
+        }
         if (obj) {
             if (obj.id) {
                 selectedActivity$().next({ id: obj.id });
@@ -117,7 +128,16 @@ function navigateCommandUrl(params: string[]) {
         return;
     const json = decodeURIComponent(params['args']);
     const args = JSON.parse(json);
-    if (args === 'autoUpdater.quitAndInstall') {
+    if (typeof args ==='string' && args.includes('autoUpdater.quitAndInstall')) {
         Emulator.quitAndInstall();
     }
+}
+
+function navigatePaymentUrl(payload: string) {
+    const settings = getSettings();
+    Electron.ipcRenderer.send("createCheckoutWindow", {
+        payload: payload,
+        settings: settings,
+        serviceUrl: Emulator.serviceUrl
+    });
 }

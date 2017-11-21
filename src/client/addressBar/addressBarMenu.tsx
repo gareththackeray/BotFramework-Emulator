@@ -32,26 +32,36 @@
 //
 
 import * as React from 'react';
-import { getSettings, ISettings, addSettingsListener } from '../settings';
-import { Settings as ServerSettings } from '../../types/serverSettingsTypes';
-import { AddressBarActions, ConversationActions, ServerSettingsActions } from '../reducers';
+import { getSettings, Settings, addSettingsListener  } from '../settings';
+import { AddressBarActions, ConversationActions, HotkeyActions } from '../reducers';
 import { Emulator } from '../emulator';
-import { IBot, newBot } from '../../types/botTypes';
-import * as log from '../log';
-import { AddressBarOperators } from './addressBarOperators';
 import * as Constants from '../constants';
-import { remote, app, shell } from 'electron';
-import { uniqueId } from '../../utils';
+import { remote } from 'electron';
 
-const { Menu, MenuItem } = remote;
+const { Menu } = remote;
 
 export class AddressBarMenu extends React.Component<{}, {}> {
+    addressBarMenu: any;
+    settingsUnsubscribe: any;
 
-    showMenu() {
+    componentWillMount() {
+        this.settingsUnsubscribe = addSettingsListener((settings: Settings) => {
+            if (settings.hotkey.openMenu) {
+                HotkeyActions.clearOpenMenu();
+                this.showMenuAtCoordinates();
+            }
+        });
+    }
+
+    componentWillUnmount() {
+        this.settingsUnsubscribe();
+    }
+
+    showMenu(options?: any) {
         const settings = getSettings();
         const inConversation = ((settings.serverSettings.activeBot || '').length > 0 && (settings.conversation.conversationId || '').length > 0);
         const haveActiveBot = (settings.serverSettings.activeBot || '').length > 0;
-        const template: Electron.MenuItemOptions[] = [
+        const template: Electron.MenuItemConstructorOptions[] = [
             {
                 label: 'New Conversation',
                 click: () => ConversationActions.newConversation(),
@@ -140,30 +150,43 @@ export class AddressBarMenu extends React.Component<{}, {}> {
                 click: () => AddressBarActions.showConversationSettings()
             },
             */
-            /*
-            {
-                label: 'Send System Activity',
-                type: 'submenu',
-                submenu: [
-                    {
-                        label: 'Ping',
-                        click: () => this.sendPingActivity(),
-                        enabled: false
-                    },
-                    {
-                        label: 'Typing',
-                        click: () => this.sendTypingActivity(),
-                        enabled: false
-                    }
-                ]
-            },
-            */
             {
                 type: 'separator'
             },
             {
                 label: 'App Settings',
                 click: () => AddressBarActions.showAppSettings()
+            },
+            {
+                type: 'separator'
+            },
+            {
+                label: 'Zoom',
+                type: 'submenu',
+                enabled: true,
+                submenu: [
+                    {
+                        label: 'Zoom In',
+                        accelerator: 'CommandOrControl+=',
+                        click: () => {
+                            Emulator.zoomIn();
+                        }
+                    },
+                    {
+                        label: 'Zoom Out',
+                        accelerator: 'CommandOrControl+-',
+                        click: () => {
+                            Emulator.zoomOut();
+                        }
+                    },
+                    {
+                        label: 'Reset Zoom',
+                        accelerator: 'CommandOrControl+0',
+                        click: () => {
+                            Emulator.zoomReset();
+                        }
+                    },
+                ]
             },
             {
                 type: 'separator'
@@ -191,25 +214,50 @@ export class AddressBarMenu extends React.Component<{}, {}> {
             },
             {
                 label: 'Credits',
-                click: () => window.open('https://github.com/Microsoft/BotFramework-Emulator/blob/master/ThirdPartyLicenses.txt')
+                click: () => window.open('https://aka.ms/l7si1g')
             },
             {
                 type: 'separator'
             },
             {
                 label: 'Report issues',
-                click: () => window.open('https://github.com/Microsoft/BotFramework-Emulator/issues/new')
+                click: () => window.open('https://aka.ms/cy106f')
             },
         ];
 
         const menu = Menu.buildFromTemplate(template);
-        menu.popup();
+        menu.popup(undefined, options);
+    }
+
+    showMenuAtCoordinates() {
+        this.showMenu(this.getOptionsWithCoordinates());
+    }
+
+    getOptionsWithCoordinates() {
+        let zoomLevel = getSettings().serverSettings.windowState.zoomLevel;
+        let zoomRatio = this.getZoomRatio(zoomLevel);
+
+        return this.calculateCoordinatesAccordingToZoomLevel(zoomRatio);
+    }
+
+    calculateCoordinatesAccordingToZoomLevel(zoomLevelRatio: any) {
+        let rect = this.addressBarMenu.getBoundingClientRect();
+        let left = Math.ceil((rect.left + rect.width / 2) * zoomLevelRatio);
+        let top = Math.ceil((rect.top + rect.height / 2) * zoomLevelRatio);
+        return {x: left, y: top};
+    }
+
+    getZoomRatio(zoomLevel: number): number {
+        // This is a curve fit to the set of aspect ratios at different zoom levels empirically determined by GitHub user @rinormaloku
+        return 0.4819 * Math.exp(0.1824 * (zoomLevel + 4));
     }
 
     render() {
         return (
             <a className='undecorated-text' href='javascript:void(0)' title='Settings'>
-                <div className="addressbar-menu" dangerouslySetInnerHTML={{ __html: Constants.hamburgerIcon('toolbar-button', 24) }} onClick={() => this.showMenu()} />
+                <div className="addressbar-menu"
+                     ref={ref => this.addressBarMenu = ref}
+                     dangerouslySetInnerHTML={{ __html: Constants.hamburgerIcon('toolbar-button', 24) }} onClick={() => this.showMenu()} />
             </a>
         );
     }

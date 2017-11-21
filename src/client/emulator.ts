@@ -32,8 +32,9 @@
 //
 
 import * as request from 'request';
+import * as http from 'http';
 import { getSettings } from './settings';
-
+import * as Payment from '../types/paymentTypes';
 
 export class Emulator {
     public static serviceUrl: string;
@@ -112,8 +113,85 @@ export class Emulator {
         request(options);
     }
 
-    public static quitAndInstall() {
+    public static updateShippingAddress(
+            checkoutSession: Payment.ICheckoutConversationSession,
+            paymentRequest: Payment.IPaymentRequest,
+            shippingAddress: Payment.IPaymentAddress,
+            shippingOptionId: string,
+            cb: (err, statusCode: number, body: Payment.IPaymentRequestUpdateResult) => void) {
         const settings = getSettings();
+        let options: request.OptionsWithUrl = {
+            url: `${this.serviceUrl}/emulator/${settings.conversation.conversationId}/invoke/updateShippingAddress`,
+            method: "POST",
+            json: [{ checkoutSession: checkoutSession, request: paymentRequest, shippingAddress: shippingAddress, shippingOptionId: shippingOptionId }],
+        };
+        let responseCallback = (err, resp: http.IncomingMessage, body) => {
+            cb(err, resp.statusCode, body as Payment.IPaymentRequestUpdateResult);
+        };
+        request(options, responseCallback);
+    }
+
+    public static updateShippingOption(
+            checkoutSession: Payment.ICheckoutConversationSession,
+            paymentRequest: Payment.IPaymentRequest,
+            shippingAddress: Payment.IPaymentAddress,
+            shippingOptionId: string,
+            cb: (err, statusCode: number, body: Payment.IPaymentRequestUpdateResult) => void) {
+        const settings = getSettings();
+        let options: request.OptionsWithUrl = {
+            url: `${this.serviceUrl}/emulator/${settings.conversation.conversationId}/invoke/updateShippingOption`,
+            method: "POST",
+            json: [{ checkoutSession: checkoutSession, request: paymentRequest, shippingAddress: shippingAddress, shippingOptionId: shippingOptionId }],
+        };
+        let responseCallback = (err, resp: http.IncomingMessage, body) => {
+            cb(err, resp.statusCode, body as Payment.IPaymentRequestUpdateResult);
+        };
+        request(options, responseCallback);
+    }
+
+    public static paymentComplete(
+            checkoutSession: Payment.ICheckoutConversationSession,
+            paymentRequest: Payment.IPaymentRequest,
+            shippingAddress: Payment.IPaymentAddress,
+            shippingOptionId: string,
+            payerEmail: string,
+            payerPhone: string,
+            cb: (err, statusCode: number, body: Payment.IPaymentRequestCompleteResult) => void) {
+        const settings = getSettings();
+        let options: request.OptionsWithUrl = {
+            url: `${this.serviceUrl}/emulator/${settings.conversation.conversationId}/invoke/paymentComplete`,
+            method: "POST",
+            json: [{ checkoutSession: checkoutSession, request: paymentRequest, shippingAddress: shippingAddress, shippingOptionId: shippingOptionId, payerEmail: payerEmail, payerPhone: payerPhone }],
+        };
+        let responseCallback = (err, resp: http.IncomingMessage, body) => {
+            cb(err, resp.statusCode, body as Payment.IPaymentRequestCompleteResult);
+        };
+        request(options, responseCallback);
+    }
+
+    public static zoomIn() {
+        let options: request.OptionsWithUrl = {
+            url: `${this.serviceUrl}/emulator/window/zoomIn`,
+            method: "POST"
+        };
+        request(options);
+    }
+    public static zoomOut() {
+        let options: request.OptionsWithUrl = {
+            url: `${this.serviceUrl}/emulator/window/zoomOut`,
+            method: "POST"
+        };
+        request(options);
+    }
+    public static zoomReset() {
+        let options: request.OptionsWithUrl = {
+            url: `${this.serviceUrl}/emulator/window/zoomReset`,
+            method: "POST"
+        };
+        request(options);
+    }
+
+    public static quitAndInstall() {
         let options: request.OptionsWithUrl = {
             url: `${this.serviceUrl}/emulator/system/quitAndInstall`,
             method: "POST"

@@ -32,24 +32,25 @@
 //
 
 import * as Electron from 'electron';
-import { Store, createStore, combineReducers, Reducer, Action } from 'redux';
-import { Subscription, BehaviorSubject } from 'rxjs';
+import { Store, createStore, combineReducers, Action } from 'redux';
+import { BehaviorSubject } from 'rxjs';
 import { ActivityOrID } from '../types/activityTypes';
-import { ISettings as IServerSettings, Settings as ServerSettings } from '../types/serverSettingsTypes';
-import { InspectorActions, ConversationActions } from './reducers';
-import { loadSettings, saveSettings } from '../utils';
+import { Settings as ServerSettings } from '../types/serverSettingsTypes';
+import { InspectorActions, ConversationActions, HotkeyActions } from './reducers';
+import { loadSettings, saveSettings } from '../shared/utils';
 import {
     layoutReducer,
     addressBarReducer,
     conversationReducer,
     logReducer,
+    wordWrapReducer,
     inspectorReducer,
+    hotkeyReducer,
     serverSettingsReducer,
     ServerSettingsActions,
     AddressBarActions
 } from './reducers';
-import { IBot, newBot } from '../types/botTypes';
-import { uniqueId } from '../utils';
+import { IBot } from '../types/botTypes';
 import * as log from './log';
 import { Emulator } from './emulator';
 
@@ -70,6 +71,10 @@ export interface ILayoutState {
     vertSplit?: number | string,
 }
 
+export interface IWordWrapState {
+    wordwrap?: boolean
+}
+
 export interface IAddressBarState {
     text?: string,
     matchingBots?: IBot[],
@@ -78,7 +83,8 @@ export interface IAddressBarState {
     showAppSettings: boolean,
     showConversationSettings: boolean,
     showSearchResults: boolean,
-    showBotCreds: boolean
+    showBotCreds: boolean,
+    hasFocus: boolean
 }
 
 export interface IConversationState {
@@ -90,21 +96,31 @@ export interface ILogState {
     autoscroll?: boolean
 }
 
+export interface IHotkeyState {
+    openMenu: boolean,
+    toggleAddressBarFocus: boolean,
+}
+
 export interface IInspectorState {
     selectedObject?: any
 }
 
 export interface IPersistentSettings {
-    layout?: ILayoutState
+    layout?: ILayoutState,
+    wordwrap?: IWordWrapState
 }
 
 export class PersistentSettings implements IPersistentSettings {
     layout: ILayoutState;
+    wordwrap: IWordWrapState;
     constructor(settings: ISettings) {
         Object.assign(this, {
             layout: {
                 horizSplit: settings.layout.horizSplit,
                 vertSplit: settings.layout.vertSplit
+            },
+            wordwrap: {
+                wordwrap: settings.wordwrap.wordwrap
             }
         });
     }
@@ -115,7 +131,8 @@ export interface ISettings extends IPersistentSettings {
     conversation: IConversationState,
     log?: ILogState,
     inspector?: IInspectorState,
-    serverSettings?: ServerSettings
+    hotkey?: IHotkeyState,
+    serverSettings?: ServerSettings,
 }
 
 export class Settings implements ISettings {
@@ -125,6 +142,8 @@ export class Settings implements ISettings {
     log: ILogState;
     inspector: IInspectorState;
     serverSettings: ServerSettings;
+    wordwrap: IWordWrapState;
+    hotkey: IHotkeyState;
 
     constructor(settings?: ISettings) {
         Object.assign(this, settings);
@@ -144,7 +163,8 @@ export const addressBarDefault: IAddressBarState = {
     showAppSettings: false,
     showConversationSettings: false,
     showSearchResults: false,
-    showBotCreds: false
+    showBotCreds: false,
+    hasFocus: false
 }
 
 export const conversationDefault: IConversationState = {
@@ -156,8 +176,17 @@ export const logDefault: ILogState = {
     autoscroll: true
 }
 
+export const wordWrapDefault: IWordWrapState = {
+    wordwrap: false
+}
+
 export const inspectorDefault: IInspectorState = {
     selectedObject: null
+}
+
+export const hotkeyDefault: IHotkeyState = {
+    openMenu: false,
+    toggleAddressBarFocus: false,
 }
 
 export const settingsDefault: ISettings = {
@@ -165,6 +194,7 @@ export const settingsDefault: ISettings = {
     addressBar: addressBarDefault,
     conversation: conversationDefault,
     log: logDefault,
+    wordwrap: wordWrapDefault,
     inspector: inspectorDefault,
     serverSettings: new ServerSettings()
 }
@@ -180,7 +210,9 @@ const getStore = (): Store<ISettings> => {
             addressBar: addressBarReducer,
             conversation: conversationReducer,
             log: logReducer,
+            wordwrap: wordWrapReducer,
             inspector: inspectorReducer,
+            hotkey: hotkeyReducer,
             serverSettings: serverSettingsReducer
         }), initialSettings);
     }
@@ -231,7 +263,6 @@ export const startup = () => {
     // Listen for new settings from the server.
     Electron.ipcRenderer.on('serverSettings', (event, ...args) => {
         const serverSettings = new ServerSettings(args[0]);
-        //console.info("Received new server state.", serverSettings);
         ServerSettingsActions.set(serverSettings);
     });
     // Listen for log messages from the server.
@@ -255,6 +286,12 @@ export const startup = () => {
     });
     Electron.ipcRenderer.on('show-about', () => {
         AddressBarActions.showAbout()
+    });
+    Electron.ipcRenderer.on('open-menu', () => {
+        HotkeyActions.openMenu()
+    });
+    Electron.ipcRenderer.on('toggle-address-bar-focus', () => {
+        HotkeyActions.toggleAddressBarFocus()
     });
     Electron.ipcRenderer.on('new-conversation', (event, ...args) => {
         ConversationActions.newConversation(args[0]);

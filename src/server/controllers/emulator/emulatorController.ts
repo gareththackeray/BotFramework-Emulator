@@ -34,15 +34,16 @@
 import * as Restify from 'restify';
 import * as HttpStatus from "http-status-codes";
 import { autoUpdater } from 'electron';
-import { getSettings, getStore } from '../../settings';
+import { getSettings } from '../../settings';
 import { emulator } from '../../emulator';
 import { RestServer } from '../../restServer';
 import { jsonBodyParser } from '../../jsonBodyParser';
 import * as ResponseTypes from '../../../types/responseTypes';
-import { ErrorCodes, IResourceResponse, IErrorResponse } from '../../../types/responseTypes';
+import { ErrorCodes } from '../../../types/responseTypes';
 import { IChannelAccount } from '../../../types/accountTypes';
-import { IBot } from '../../../types/botTypes';
+import { windowManager } from '../../main';
 import { Conversation } from '../../conversationManager';
+import * as Payment from '../../../types/paymentTypes';
 
 
 function getConversation(conversationId: string): Conversation {
@@ -69,6 +70,12 @@ export class EmulatorController {
         server.router.post('/emulator/:conversationId/typing', this.typing);
         server.router.post('/emulator/:conversationId/ping', this.ping);
         server.router.del('/emulator/:conversationId/userdata', this.deleteUserData);
+        server.router.post('/emulator/:conversationId/invoke/updateShippingAddress', jsonBodyParser(), this.updateShippingAddress);
+        server.router.post('/emulator/:conversationId/invoke/updateShippingOption', jsonBodyParser(), this.updateShippingOption);
+        server.router.post('/emulator/:conversationId/invoke/paymentComplete', jsonBodyParser(), this.paymentComplete);
+        server.router.post('/emulator/window/zoomIn', this.zoomIn);
+        server.router.post('/emulator/window/zoomOut', this.zoomOut);
+        server.router.post('/emulator/window/zoomReset', this.zoomReset);
         server.router.post('/emulator/system/quitAndInstall', this.quitAndInstall);
     }
 
@@ -169,6 +176,81 @@ export class EmulatorController {
         } catch (err) {
             ResponseTypes.sendErrorResponse(req, res, next, err);
         }
+    }
+
+    static updateShippingAddress = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
+        try {
+            const conversation = getConversation(req.params.conversationId);
+            const body: {
+                checkoutSession: Payment.ICheckoutConversationSession,
+                request: Payment.IPaymentRequest,
+                shippingAddress: Payment.IPaymentAddress,
+                shippingOptionId: string } = req.body[0];
+            conversation.sendUpdateShippingAddressOperation(body.checkoutSession, body.request, body.shippingAddress, body.shippingOptionId, (statusCode, body) => {
+                if (statusCode === HttpStatus.OK) {
+                    res.send(HttpStatus.OK, body);
+                } else {
+                    res.send(statusCode);
+                }
+                res.end();
+            });
+        } catch (err) {
+            ResponseTypes.sendErrorResponse(req, res, next, err);
+        }
+    }
+
+    static updateShippingOption = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
+        try {
+            const conversation = getConversation(req.params.conversationId);
+            const body: {
+                checkoutSession: Payment.ICheckoutConversationSession,
+                request: Payment.IPaymentRequest,
+                shippingAddress: Payment.IPaymentAddress,
+                shippingOptionId: string } = req.body[0];
+            conversation.sendUpdateShippingOptionOperation(body.checkoutSession, body.request, body.shippingAddress, body.shippingOptionId, (statusCode, body) => {
+                if (statusCode === HttpStatus.OK) {
+                    res.send(HttpStatus.OK, body);
+                } else {
+                    res.send(statusCode);
+                }
+                res.end();
+            });
+        } catch (err) {
+            ResponseTypes.sendErrorResponse(req, res, next, err);
+        }
+    }
+
+    static paymentComplete = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
+        try {
+            const conversation = getConversation(req.params.conversationId);
+            const body: {
+                checkoutSession: Payment.ICheckoutConversationSession,
+                request: Payment.IPaymentRequest,
+                shippingAddress: Payment.IPaymentAddress,
+                shippingOptionId: string,
+                payerEmail: string,
+                payerPhone: string } = req.body[0];
+            conversation.sendPaymentCompleteOperation(body.checkoutSession, body.request, body.shippingAddress, body.shippingOptionId, body.payerEmail, body.payerPhone, (statusCode, body) => {
+                if (statusCode === HttpStatus.OK) {
+                    res.send(HttpStatus.OK, body);
+                } else {
+                    res.send(statusCode);
+                }
+                res.end();
+            });
+        } catch (err) {
+            ResponseTypes.sendErrorResponse(req, res, next, err);
+        }
+    }
+
+    static zoomIn = () => {
+        windowManager.zoomIn();
+    }
+    static zoomOut = () => {
+        windowManager.zoomOut();
+    }
+    static zoomReset = () => {
+        windowManager.zoomTo(0);
     }
 
     static quitAndInstall = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {

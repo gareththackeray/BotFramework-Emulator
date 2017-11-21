@@ -34,9 +34,9 @@
 import * as Restify from 'restify';
 import * as HttpStatus from "http-status-codes";
 import * as ResponseTypes from '../../../types/responseTypes';
-import { ErrorCodes, IResourceResponse, IErrorResponse, APIException } from '../../../types/responseTypes';
-import { IAttachmentData, IAttachmentInfo, IAttachmentView } from '../../../types/attachmentTypes';
-import { uniqueId } from '../../../utils';
+import { ErrorCodes, } from '../../../types/responseTypes';
+import { IAttachmentData, IAttachmentInfo } from '../../../types/attachmentTypes';
+import { uniqueId } from '../../../shared/utils';
 import { RestServer } from '../../restServer';
 import * as log from '../../log';
 
@@ -71,7 +71,6 @@ export class AttachmentsController {
 
     public static getAttachmentInfo = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
         try {
-            console.log("framework: getAttachmentInfo");
             const parms: IAttachmentParams = req.params;
             let attachment: IAttachmentData = AttachmentsController.attachments[parms.attachmentId];
             if (attachment) {
@@ -102,7 +101,6 @@ export class AttachmentsController {
     }
 
     public static getAttachment = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
-        console.log("framework: getAttachment");
         try {
             const parms: IAttachmentParams = req.params;
             let attachment: IAttachmentData = AttachmentsController.attachments[parms.attachmentId];

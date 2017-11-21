@@ -37,10 +37,17 @@ import { IUser } from '../types/userTypes';
 
 export interface IFrameworkSettings {
     // path to use for ngrok
-    ngrokPath?: string
+    ngrokPath?: string,
+    // option for deciding whether to bypass ngrok for bots on localhost
+    bypassNgrokLocalhost?: boolean,
+    stateSizeLimit?: number,
+    // option for using 2.0 or 1.0 tokens
+    use10Tokens?: boolean
 }
 
 export interface IWindowStateSettings {
+    displayId?: number,
+    zoomLevel?: number,
     top?: number,
     left?: number,
     width?: number,
@@ -85,10 +92,14 @@ export class Settings implements ISettings {
 }
 
 export const frameworkDefault: IFrameworkSettings = {
-    ngrokPath: ''
+    ngrokPath: '',
+    bypassNgrokLocalhost: true,
+    stateSizeLimit: 64,
+    use10Tokens: false
 }
 
 export const windowStateDefault: IWindowStateSettings = {
+    zoomLevel: 0,
     width: 800,
     height: 600,
     left: 100,

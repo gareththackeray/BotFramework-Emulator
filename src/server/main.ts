@@ -38,49 +38,92 @@ import { WindowStateAction } from './reducers/windowStateReducer';
 import * as url from 'url';
 import * as path from 'path';
 import * as log from './log';
-import { Emulator, emulator } from './emulator';
+import { Emulator } from './emulator';
 import * as nomnom from 'nomnom';
 
-var pjson = require('../../package.json');
+import { WindowManager } from './windowManager';
+import * as commandLine from './commandLine'
+import * as electronLocalShortcut from 'electron-localshortcut';
 
-process.on('uncaughtException', (error: Error) => {
+(process as NodeJS.EventEmitter).on('uncaughtException', (error: Error) => {
     console.error(error);
     log.error('[err-server]', error.message.toString(), JSON.stringify(error.stack));
 });
 
 export let mainWindow: Electron.BrowserWindow;
+export let windowManager: WindowManager;
+
+var openUrls = [];
+var onOpenUrl = function (event, url) {
+    event.preventDefault();
+    if (process.platform === 'darwin') {
+        if (mainWindow && mainWindow.webContents) {
+            // the app is already running, send a message containing the url to the renderer process
+            mainWindow.webContents.send('botemulator', url);
+        } else {
+            // the app is not yet running, so store the url so the UI can request it later
+            openUrls.push(url);
+        }
+    }
+};
+
+commandLine.parseArgs();
+
+Electron.app.on('will-finish-launching', (event, args) => {
+    Electron.ipcMain.on('getUrls', (event, arg) => {
+        openUrls.forEach(url => mainWindow.webContents.send('botemulator', url));
+        openUrls = [];
+    });
+
+    // On Mac, a protocol handler invocation sends urls via this event
+    Electron.app.on('open-url', onOpenUrl);
+});
+
+
+var windowIsOffScreen = function(windowBounds: Electron.Rectangle): boolean {
+    const nearestDisplay = Electron.screen.getDisplayMatching(windowBounds).workArea;
+    return (
+        windowBounds.x > (nearestDisplay.x + nearestDisplay.width) ||
+        (windowBounds.x + windowBounds.width) < nearestDisplay.x ||
+        windowBounds.y > (nearestDisplay.y + nearestDisplay.height) ||
+        (windowBounds.y + windowBounds.height) < nearestDisplay.y
+    );
+}
 
 const createMainWindow = (listenPort: number) => {
 
     const windowTitle = "Bot Framework Channel Emulator";
 
-    // TODO: Make a better/safer window state restoration module
-    // (handles change in display dimensions, maximized state, etc)
-    const safeLowerBound = (val: any, lowerBound: number) => {
-        if (typeof (val) === 'number') {
-            return Math.max(lowerBound, val);
-        }
-    }
     const settings = getSettings();
+    let initBounds: Electron.Rectangle = {
+        width: settings.windowState.width || 0,
+        height: settings.windowState.height || 0,
+        x: settings.windowState.left || 0,
+        y: settings.windowState.top || 0,
+    }
+    if (windowIsOffScreen(initBounds)) {
+        let display = Electron.screen.getAllDisplays().find(display => display.id === settings.windowState.displayId);
+        display = display || Electron.screen.getDisplayMatching(initBounds);
+        initBounds.x = display.workArea.x;
+        initBounds.y = display.workArea.y;
+    }
     mainWindow = new Electron.BrowserWindow(
         {
             show: false,
             backgroundColor: '#f7f7f7',
-            width: safeLowerBound(settings.windowState.width, 0),
-            height: safeLowerBound(settings.windowState.height, 0),
-            x: safeLowerBound(settings.windowState.left, 0),
-            y: safeLowerBound(settings.windowState.top, 0),
-            webPreferences: {
-                directWrite: false
-            }
+            width: initBounds.width,
+            height: initBounds.height,
+            x: initBounds.x,
+            y: initBounds.y
         });
     mainWindow.setTitle("" + listenPort.toString() + " " + windowTitle);    
+    windowManager = new WindowManager();
 
     //mainWindow.webContents.openDevTools();
 
     if (process.platform === 'darwin') {
         // Create the Application's main menu
-        var template: Electron.MenuItemOptions[] = [
+        var template: Electron.MenuItemConstructorOptions[] = [
             {
                 label: windowTitle,
                 submenu: [
@@ -105,56 +148,99 @@ const createMainWindow = (listenPort: number) => {
         Menu.setApplicationMenu(null);
     }
 
+    const rememberBounds = () => {
+        const bounds = mainWindow.getBounds();
+        dispatch<WindowStateAction>({
+            type: 'Window_RememberBounds',
+            state: {
+                displayId: Electron.screen.getDisplayMatching(bounds).id,
+                width: bounds.width,
+                height: bounds.height,
+                left: bounds.x,
+                top: bounds.y
+            }
+        });
+    }
+
     mainWindow.on('resize', () => {
-        const bounds = mainWindow.getBounds();
-        dispatch<WindowStateAction>({
-            type: 'Window_RememberBounds',
-            state: {
-                width: bounds.width,
-                height: bounds.height,
-                left: bounds.x,
-                top: bounds.y
-            }
-        });
+        rememberBounds();
     });
+
     mainWindow.on('move', () => {
-        const bounds = mainWindow.getBounds();
-        dispatch<WindowStateAction>({
-            type: 'Window_RememberBounds',
-            state: {
-                width: bounds.width,
-                height: bounds.height,
-                left: bounds.x,
-                top: bounds.y
-            }
-        });
+        rememberBounds();
     });
+
     mainWindow.on('closed', function () {
+        windowManager.closeAll();
         mainWindow = null;
     });
 
+    mainWindow.on('restore', () => {
+        if (windowIsOffScreen(mainWindow.getBounds())) {
+            const bounds = mainWindow.getBounds();
+            let display = Electron.screen.getAllDisplays().find(display => display.id === getSettings().windowState.displayId);
+            display = display || Electron.screen.getDisplayMatching(bounds);
+            mainWindow.setPosition(display.workArea.x, display.workArea.y);
+            dispatch<WindowStateAction>({
+                type: 'Window_RememberBounds',
+                state: {
+                    displayId: display.id,
+                    width: bounds.width,
+                    height: bounds.height,
+                    left: display.workArea.x,
+                    top: display.workArea.y
+                }
+            });
+        }
+    });
+
+    Electron.globalShortcut.register("CommandOrControl+=", () => {
+        windowManager.zoomIn();
+    });
+    Electron.globalShortcut.register("CommandOrControl+-", () => {
+        windowManager.zoomOut();
+    });
+    Electron.globalShortcut.register("CommandOrControl+0", () => {
+        windowManager.zoomTo(0);
+    });
+
+    let registerHotkeys = (hotkeys, callback) => hotkeys.forEach(hotkey =>
+        electronLocalShortcut.register(mainWindow, hotkey, callback));
+
+    registerHotkeys(["F10", "Alt+F"],() => {
+        Emulator.send('open-menu');
+    });
+    registerHotkeys(["F5", "CmdOrCtrl+R"],() => {
+        Emulator.send('new-conversation');
+    });
+    registerHotkeys(["F6", "CmdOrCtrl+L"],() => {
+        Emulator.send('toggle-address-bar-focus');
+    });
+
     mainWindow.once('ready-to-show', () => {
+        mainWindow.webContents.setZoomLevel(settings.windowState.zoomLevel);
         mainWindow.show();
     });
+
+    let queryString = '';
+    if (process.argv[1] && process.argv[1].indexOf('botemulator') !== -1) {
+        // add a query string with the botemulator protocol handler content
+        queryString = '?' + process.argv[1];
+    }
+
     let page = url.format({
         protocol: 'file',
         slashes: true,
         pathname: path.join(__dirname, '../client/index.html')
     });
+
+    if (queryString) {
+        page = page + queryString;
+    }
+
     mainWindow.loadURL(page);
 }
 
-const shouldQuit = Electron.app.makeSingleInstance((commandLine, workingDirectory) => {
-    if (mainWindow) {
-        if (mainWindow.isMinimized())
-            mainWindow.restore();
-        mainWindow.focus();
-    }
-});
-
-if (shouldQuit) {
-    Electron.app.quit();
-} else {
     let listenPort:number;
     
     for(let i = 0; i < process.argv.length; i++){
@@ -167,18 +253,19 @@ if (shouldQuit) {
     Emulator.startup(listenPort);
 
     Electron.app.on('ready', () => createMainWindow(listenPort));
-    Electron.app.on('window-all-closed', function () {
-        if (process.platform !== 'darwin') {
-            Electron.app.quit();
-        }
-    });
-    Electron.app.on('activate', function () {
-        if (mainWindow === null) {            
-            createMainWindow(listenPort);
-        }
-    });
+Electron.app.on('window-all-closed', function () {
+    if (process.platform !== 'darwin') {
+        Electron.app.quit();
+    }
+});
+
+Electron.app.on('activate', function () {
+    if (mainWindow === null) {
+        createMainWindow(listenPort);
+    }
+});
     
-}
 
 // Do this last, otherwise startup bugs are harder to diagnose.
 require('electron-debug')();
+

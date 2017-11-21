@@ -38,10 +38,16 @@ import { IWindowStateSettings, windowStateDefault } from '../../types/serverSett
 export type WindowStateAction = {
     type: 'Window_RememberBounds',
     state: {
+        displayId: number,
         top: number,
         left: number,
         width: number,
         height: number
+    }
+} | {
+    type: 'Window_RememberZoomLevel',
+    state: {
+        zoomLevel: number,
     }
 }
 
@@ -49,14 +55,18 @@ export const windowStateReducer: Reducer<IWindowStateSettings> = (
     state = windowStateDefault,
     action: WindowStateAction
 ) => {
-    //console.log('windowStateReducer', JSON.stringify(action), JSON.stringify(state));
     switch (action.type) {
         case 'Window_RememberBounds':
             return Object.assign({}, state, {
+                displayId: action.state.displayId,
                 top: action.state.top,
                 left: action.state.left,
                 width: action.state.width,
                 height: action.state.height
+            });
+        case 'Window_RememberZoomLevel':
+            return Object.assign({}, state, {
+                zoomLevel: action.state.zoomLevel,
             });
         default:
             return state

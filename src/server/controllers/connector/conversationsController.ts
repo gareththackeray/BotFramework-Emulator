@@ -36,17 +36,17 @@ import { IGenericActivity, IConversationParameters } from '../../../types/activi
 import { IUser } from '../../../types/userTypes';
 import { getSettings, getStore } from '../../settings';
 import { Emulator, emulator } from '../../emulator';
-import { uniqueId } from '../../../utils';
 import * as HttpStatus from "http-status-codes";
 import * as ResponseTypes from '../../../types/responseTypes';
-import { ErrorCodes, IResourceResponse, IErrorResponse } from '../../../types/responseTypes';
-import { IAttachmentData, IAttachmentInfo, IAttachmentView } from '../../../types/attachmentTypes';
+import { ErrorCodes, IResourceResponse } from '../../../types/responseTypes';
+import { IAttachmentData } from '../../../types/attachmentTypes';
 import { AttachmentsController } from './attachmentsController';
 import * as log from '../../log';
 import { RestServer } from '../../restServer';
 import { BotFrameworkAuthentication } from '../../botFrameworkAuthentication';
 import { error } from '../../log';
 import { jsonBodyParser } from '../../jsonBodyParser';
+import { VersionManager } from '../../versionManager';
 
 
 interface IConversationAPIPathParameters {
@@ -71,8 +71,6 @@ export class ConversationsController {
     public static createConversation = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
         let conversationParameters = <IConversationParameters>req.body;
         try {
-            console.log("connector: newConversation");
-
             const settings = getSettings();
             // look up bot
             const activeBot = settings.getActiveBot();
@@ -145,7 +143,6 @@ export class ConversationsController {
         let activity = <IGenericActivity>req.body;
         try {
             const parms: IConversationAPIPathParameters = req.params;
-            console.log("connector: sendToConversation", JSON.stringify(activity));
 
             // look up bot
             const activeBot = getSettings().getActiveBot();
@@ -176,12 +173,13 @@ export class ConversationsController {
         let activity = <IGenericActivity>req.body;
         try {
             const parms: IConversationAPIPathParameters = req.params;
-            console.log("connector: replyToActivity", JSON.stringify(activity));
 
             // look up bot
             const activeBot = getSettings().getActiveBot();
             if (!activeBot)
                 throw ResponseTypes.createAPIException(HttpStatus.NOT_FOUND, ErrorCodes.BadArgument, "bot not found");
+
+            VersionManager.checkVersion(req.header("User-agent"));
 
             activity.id = null;
             activity.replyToId = req.params.activityId;
@@ -211,7 +209,6 @@ export class ConversationsController {
         let activity = <IGenericActivity>req.body;
         try {
             const parms: IConversationAPIPathParameters = req.params;
-            console.log("connector: updateActivity", JSON.stringify(activity));
 
             // look up bot
             const activeBot = getSettings().getActiveBot();
@@ -243,8 +240,6 @@ export class ConversationsController {
     public static deleteActivity = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
         const parms: IConversationAPIPathParameters = req.params;
         try {
-            console.log("connector: deleteActivity", JSON.stringify(parms));
-
             // look up bot
             const activeBot = getSettings().getActiveBot();
             if (!activeBot)
@@ -268,7 +263,6 @@ export class ConversationsController {
 
     // get members of a conversation
     public static getConversationMembers = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
-        console.log("connector: getConversationMembers");
         const parms: IConversationAPIPathParameters = req.params;
         try {
             // look up bot
@@ -293,15 +287,12 @@ export class ConversationsController {
 
     // get members of an activity
     public static getActivityMembers = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
-        console.log("connector: getActivityMembers");
         const parms: IConversationAPIPathParameters = req.params;
         try {
             // look up bot
             const activeBot = getSettings().getActiveBot();
             if (!activeBot)
                 throw ResponseTypes.createAPIException(HttpStatus.NOT_FOUND, ErrorCodes.BadArgument, "bot not found");
-
-            let activity = <IGenericActivity>req.body;
 
             // look up conversation
             const conversation = emulator.conversations.conversationById(activeBot.botId, parms.conversationId);
@@ -319,7 +310,6 @@ export class ConversationsController {
 
     // upload attachment
     public static uploadAttachment = (req: Restify.Request, res: Restify.Response, next: Restify.Next): any => {
-        console.log("connector: uploadAttachment");
         let attachmentData = <IAttachmentData>req.body;
         try {
             // look up bot
@@ -351,7 +341,7 @@ function getActivityText(activity: IGenericActivity): string {
         if (activity.attachments && activity.attachments.length > 0)
             return activity.attachments[0].contentType;
         else {
-            if (activity.text.length > 50)
+            if (activity.text && activity.text.length > 50)
                 return activity.text.substring(0, 50) + '...';
 
             return activity.text;

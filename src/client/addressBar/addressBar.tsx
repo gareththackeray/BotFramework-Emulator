@@ -32,11 +32,8 @@
 //
 
 import * as React from 'react';
-import { getSettings, ISettings } from '../settings';
-import { Settings as ServerSettings } from '../../types/serverSettingsTypes';
-import { AddressBarActions, ConversationActions, ServerSettingsActions } from '../reducers';
-import { IBot, newBot } from '../../types/botTypes';
-import * as log from '../log';
+import { getSettings, Settings, addSettingsListener } from '../settings';
+import { AddressBarActions, HotkeyActions } from '../reducers';
 import { AddressBarOperators } from './addressBarOperators';
 import { AddressBarStatus } from './addressBarStatus';
 import { AddressBarTextBox } from './addressBarTextBox';
@@ -47,6 +44,7 @@ import { AddressBarBotCreds } from './addressBarBotCreds';
 
 
 export class AddressBar extends React.Component<{}, {}> {
+    settingsUnsubscribe: any;
 
     pageClicked = (ev: Event) => {
         if (ev.defaultPrevented)
@@ -63,19 +61,39 @@ export class AddressBar extends React.Component<{}, {}> {
         }
 
         // Click was outside the address bar. Close open subpanels.
+        this.closeSubPanels(settings);
+    }
+
+    componentWillMount() {
+        this.settingsUnsubscribe = addSettingsListener((settings) => {
+            if (settings.hotkey.toggleAddressBarFocus) {
+                HotkeyActions.clearToggleAddressBarFocus();
+                if (!settings.addressBar.hasFocus) {
+                    AddressBarActions.gainFocus();
+                }
+                else {
+                    this.closeSubPanels(settings);
+                }
+            }
+
+            this.forceUpdate();
+        });
+        window.addEventListener('click', (e) => this.pageClicked(e));
+    }
+
+    componentWillUnmount() {
+        this.settingsUnsubscribe();
+        window.removeEventListener('click', (e) => this.pageClicked(e));
+    }
+
+    closeSubPanels(settings: Settings) {
         AddressBarOperators.clearMatchingBots();
         if (settings.addressBar.showSearchResults)
             AddressBarActions.hideSearchResults();
         if (settings.addressBar.showBotCreds)
             AddressBarActions.hideBotCreds();
-    }
-
-    componentWillMount() {
-        window.addEventListener('click', (e) => this.pageClicked(e));
-    }
-
-    componentWillUnmount() {
-        window.removeEventListener('click', (e) => this.pageClicked(e));
+        if (settings.addressBar.hasFocus)
+            AddressBarActions.loseFocus();
     }
 
     render() {

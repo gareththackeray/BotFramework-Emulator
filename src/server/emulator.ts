@@ -39,7 +39,7 @@ import { BotFrameworkService } from './botFrameworkService';
 import { ConversationManager } from './conversationManager';
 import * as Settings from './settings';
 import * as Electron from 'electron';
-import { mainWindow } from './main';
+import { windowManager, mainWindow } from './main';
 import {RestServer} from './restServer';
 
 
@@ -52,7 +52,6 @@ interface IQueuedMessage {
  * Top-level state container for the Node process.
  */
 export class Emulator {
-    mainWindow: Electron.BrowserWindow;
     framework = new BotFrameworkService();
     conversations = new ConversationManager();
     proxyAgent: any;
@@ -72,8 +71,7 @@ export class Emulator {
             this.proxyAgent = new ElectronProxyAgent(session);
             http.globalAgent = this.proxyAgent;
             https.globalAgent = this.proxyAgent;
-
-            this.mainWindow = mainWindow;
+            windowManager.addMainWindow(mainWindow);
             Emulator.queuedMessages.forEach((msg) => {
                 Emulator.send(msg.channel, ...msg.args);
             });
@@ -87,6 +85,29 @@ export class Emulator {
         Settings.addSettingsListener(() => {
             Emulator.send('serverSettings', Settings.getStore().getState());
         });
+
+        Electron.ipcMain.on('getSpeechToken', (event, args: string) => {
+            // args is the conversation id
+            this.getSpeechToken(event, args);
+        });
+
+        Electron.ipcMain.on('refreshSpeechToken', (event, args: string) => {
+            // args is the conversation id
+            this.getSpeechToken(event, args, true);
+        });
+    }
+
+    private getSpeechToken(event: Electron.Event, conversationId: string, refresh: boolean = false) {
+        const settings = Settings.getSettings();
+        const activeBot = settings.getActiveBot();
+        if (activeBot && activeBot.botId && conversationId) {
+            let conversation = this.conversations.conversationById(activeBot.botId, conversationId);
+            conversation.getSpeechToken(10, (tokenInfo) => {
+                event.returnValue = tokenInfo;
+            }, refresh);
+        } else {
+            event.returnValue = { error: 'No bot', error_Description: 'To use speech, you must connect to a bot and have an active conversation.'};
+        }
     }
 
     /**
@@ -102,8 +123,8 @@ export class Emulator {
      * Sends a command to the client.
      */
     static send(channel: string, ...args: any[]) {
-        if (mainWindow) {
-            mainWindow.webContents.send(channel, ...args);
+        if (windowManager && windowManager.hasMainWindow()) {
+            windowManager.getMainWindow().webContents.send(channel, ...args);
         } else {
             Emulator.queuedMessages.push({ channel, args})
         }
