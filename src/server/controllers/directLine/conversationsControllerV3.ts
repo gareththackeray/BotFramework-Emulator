@@ -51,9 +51,11 @@ export class ConversationsControllerV3 {
 
     static registerRoutes(server: RestServer) {
         server.router.opts('/v3/directline', this.options);
+        server.router.opts('/v3/directline/conversations', this.options);
         server.router.post('/v3/directline/conversations', jsonBodyParser(), this.startConversation);
         server.router.get('/v3/directline/conversations/:conversationId', this.reconnectToConversation);
         server.router.get('/v3/directline/conversations/:conversationId/activities/', this.getActivities);
+        server.router.opts('/v3/directline/conversations/:conversationId/activities/', this.options);
         server.router.post('/v3/directline/conversations/:conversationId/activities', jsonBodyParser(), this.postActivity);
         server.router.post('/v3/directline/conversations/:conversationId/upload', this.upload);
         server.router.get('/v3/directline/conversations/:conversationId/stream', this.stream);
